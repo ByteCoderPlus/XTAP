@@ -1,70 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAP - Xebia Talent Acquisition Portal | Login</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="logo-container">
-                <div class="xebia-logo">
-                    <svg width="120" height="40" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Stylized X logo -->
-                        <path d="M10 5 L30 20 L10 35" stroke="#7E3A9B" stroke-width="3" fill="none" stroke-linecap="round"/>
-                        <path d="M30 5 L10 20 L30 35" stroke="#7E3A9B" stroke-width="3" fill="none" stroke-linecap="round"/>
-                        <text x="40" y="25" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#1F2937">Xebia</text>
-                    </svg>
-                </div>
-            </div>
-            
-            <div class="portal-title">
-                <h1>XTAP</h1>
-                <p class="portal-subtitle">Xebia Talent Acquisition Portal</p>
-            </div>
-            
-            <form class="login-form" id="loginForm">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
-                        placeholder="Enter your username"
-                        required
-                        autocomplete="username"
-                    >
-                </div>
-                
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        placeholder="Enter your password"
-                        required
-                        autocomplete="current-password"
-                    >
-                </div>
-                
-                <div class="form-options">
-                    <label class="remember-me">
-                        <input type="checkbox" name="remember">
-                        <span>Remember me</span>
-                    </label>
-                    <a href="#" class="forgot-password">Forgot password?</a>
-                </div>
-                
-                <button type="submit" class="login-button">Sign In</button>
-            </form>
-        </div>
-        
-        <div class="background-overlay"></div>
-    </div>
-    
-    <script src="script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bench Talent Optimizer - ATP Deployment System</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
