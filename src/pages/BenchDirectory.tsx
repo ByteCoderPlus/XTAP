@@ -279,12 +279,6 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
                     Available from {new Date(resource.availabilityDate).toLocaleDateString()}
                   </span>
                 )}
-                {resource.billingHistory.rate && (
-                  <span className="flex items-center">
-                    <DollarSign className="w-4 h-4 mr-1" />
-                    ${resource.billingHistory.rate}/hr
-                  </span>
-                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 max-w-xs">
@@ -379,17 +373,12 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
           </div>
         )}
 
-        {resource.billingHistory.billable && resource.billingHistory.rate && (
+        {resource.ctc && (
           <div className="flex items-center justify-between pt-3 border-t border-gray-200">
             <div className="flex items-center text-sm text-gray-600">
               <DollarSign className="w-4 h-4 mr-1" />
-              <span>${resource.billingHistory.rate}/hr</span>
+              <span>CTC: ₹{(resource.ctc / 100000).toFixed(1)}L {resource.ctcCurrency && `(${resource.ctcCurrency})`}</span>
             </div>
-            {resource.ctc && (
-              <span className="text-xs text-gray-500">
-                CTC: ₹{(resource.ctc / 100000).toFixed(1)}L
-              </span>
-            )}
           </div>
         )}
       </div>

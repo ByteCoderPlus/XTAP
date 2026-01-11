@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Briefcase, Award, Calendar, DollarSign, Mail, Phone, TrendingUp, FileText, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Briefcase, Award, Calendar, DollarSign, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { Resource } from '../types';
 import { mockResources } from '../data/mockData';
 import Breadcrumbs from '../components/Breadcrumbs';
@@ -66,13 +66,15 @@ export default function ResourceDetail() {
               : 'Immediate'}
           </p>
         </div>
-        <div className="card">
-          <p className="text-sm text-gray-600">Billing Rate</p>
-          <p className="text-xl font-semibold text-gray-900 mt-1 flex items-center">
-            <DollarSign className="w-4 h-4 mr-1 text-gray-500" />
-            {resource.billingHistory.rate ? `$${resource.billingHistory.rate}/hr` : 'N/A'}
-          </p>
-        </div>
+        {resource.ctc && (
+          <div className="card">
+            <p className="text-sm text-gray-600">CTC</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1 flex items-center">
+              <DollarSign className="w-4 h-4 mr-1 text-gray-500" />
+              ₹{(resource.ctc / 100000).toFixed(1)}L {resource.ctcCurrency && `(${resource.ctcCurrency})`}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -224,43 +226,6 @@ export default function ResourceDetail() {
               </div>
             </div>
           )}
-
-          {/* Billing History */}
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Billing History</h2>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Billable</span>
-                <span className={`text-sm font-medium ${resource.billingHistory.billable ? 'text-green-600' : 'text-gray-600'}`}>
-                  {resource.billingHistory.billable ? 'Yes' : 'No'}
-                </span>
-              </div>
-              {resource.billingHistory.rate && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Rate</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    ${resource.billingHistory.rate}/{resource.billingHistory.currency || 'hr'}
-                  </span>
-                </div>
-              )}
-              {resource.billingHistory.totalBilledHours && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Total Hours</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {resource.billingHistory.totalBilledHours.toLocaleString()} hrs
-                  </span>
-                </div>
-              )}
-              {resource.billingHistory.lastBilledDate && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Last Billed</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {new Date(resource.billingHistory.lastBilledDate).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Quick Actions */}
           <div className="card">

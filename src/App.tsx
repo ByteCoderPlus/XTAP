@@ -15,7 +15,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Layout><Navigate to="/bench" replace /></Layout>} />
+        <Route path="/" element={<Layout><Navigate to="/dashboard" replace /></Layout>} />
+        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
         <Route path="/bench" element={<Layout><BenchDirectory /></Layout>} />
         <Route path="/resource/:id" element={<Layout><ResourceDetail /></Layout>} />
         <Route path="/requirements" element={<Layout><Requirements /></Layout>} />
@@ -23,7 +24,6 @@ function App() {
         <Route path="/matching" element={<Layout><Matching /></Layout>} />
         <Route path="/interviews" element={<Layout><InterviewTracker /></Layout>} />
         <Route path="/soft-blocks" element={<Layout><SoftBlockManager /></Layout>} />
-        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
         <Route path="/weekly-atp" element={<Layout><WeeklyATP /></Layout>} />
         <Route path="*" element={<Layout><NotFound /></Layout>} />
       </Routes>

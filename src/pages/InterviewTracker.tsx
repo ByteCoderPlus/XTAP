@@ -69,55 +69,89 @@ export default function InterviewTracker() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Interview Workflow Tracker</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Candidate Interview</h1>
           <p className="text-gray-600 mt-1">Track and manage interview statuses and outcomes</p>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Interviews</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+      {/* Stats - Present Date */}
+      <div className="card mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Statistics</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Interviews</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                <p className="text-xs text-gray-500 mt-1">As of today</p>
+              </div>
+              <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-primary-600" />
+              </div>
             </div>
-            <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-primary-600" />
+          </div>
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Scheduled</p>
+                <p className="text-2xl font-bold text-blue-600 mt-1">{stats.scheduled}</p>
+                <p className="text-xs text-gray-500 mt-1">As of today</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending Feedback</p>
+                <p className="text-2xl font-bold text-orange-600 mt-1">{stats.pendingFeedback}</p>
+                <p className="text-xs text-gray-500 mt-1">As of today</p>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Selected</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{stats.selected}</p>
+                <p className="text-xs text-gray-500 mt-1">As of today</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-green-600" />
+              </div>
             </div>
           </div>
         </div>
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Scheduled</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{stats.scheduled}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6 text-blue-600" />
-            </div>
+      </div>
+
+      {/* Last Week Historical Data */}
+      <div className="card mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Last Week Summary</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">Total Interviews</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">15</p>
+            <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
           </div>
-        </div>
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Pending Feedback</p>
-              <p className="text-2xl font-bold text-orange-600 mt-1">{stats.pendingFeedback}</p>
-            </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-orange-600" />
-            </div>
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-gray-600">Scheduled</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">8</p>
+            <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
           </div>
-        </div>
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Selected</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">{stats.selected}</p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-green-600" />
-            </div>
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <p className="text-sm text-gray-600">Pending Feedback</p>
+            <p className="text-2xl font-bold text-orange-600 mt-1">5</p>
+            <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
+          </div>
+          <div className="p-4 bg-green-50 rounded-lg">
+            <p className="text-sm text-gray-600">Selected</p>
+            <p className="text-2xl font-bold text-green-600 mt-1">7</p>
+            <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
           </div>
         </div>
       </div>

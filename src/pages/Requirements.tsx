@@ -213,6 +213,9 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
 }
 
 function RequirementFormModal({ onClose }: { onClose: () => void }) {
+  // Auto-populate with logged-in user (in real app, get from auth context)
+  const loggedInUser = "Delivery Manager"; // This should come from auth context
+  
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -224,16 +227,16 @@ function RequirementFormModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Requirement Name</label>
             <input type="text" className="input-field" placeholder="e.g., Senior React Developer" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Role Description</label>
             <textarea className="input-field" rows={4} placeholder="Detailed description of the role..." />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Location Details</label>
               <input type="text" className="input-field" placeholder="Bangalore" />
             </div>
             <div>
@@ -243,7 +246,7 @@ function RequirementFormModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Requirement Date</label>
               <input type="date" className="input-field" />
             </div>
             <div>
@@ -255,6 +258,16 @@ function RequirementFormModal({ onClose }: { onClose: () => void }) {
                 <option value="urgent">Urgent</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Manager</label>
+            <input 
+              type="text" 
+              className="input-field bg-gray-50" 
+              value={loggedInUser}
+              readOnly
+              title="Auto-populated with logged-in user"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Required Skills</label>

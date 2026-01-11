@@ -251,6 +251,10 @@ export default function RequirementDetail() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
+                <span className="text-gray-600">Delivery Manager</span>
+                <span className="font-medium text-gray-900">{requirement.createdBy}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-600">Created by</span>
                 <span className="font-medium text-gray-900">{requirement.createdBy}</span>
               </div>

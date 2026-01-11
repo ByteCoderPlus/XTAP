@@ -21,31 +21,45 @@ export default function Matching() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-2">
             <Sparkles className="w-8 h-8 text-primary-600" />
-            <span>AI-Powered Matching</span>
+            <span>Profile Matching / Mapping</span>
           </h1>
-          <p className="text-gray-600 mt-1">Smart resource-role recommendations based on skills, experience, and availability</p>
+          <p className="text-gray-600 mt-1">AI-powered skillset matching. Smart resource-role recommendations based on skills, experience, availability, and location</p>
         </div>
       </div>
 
-      {/* Filter by Requirement */}
-      {uniqueRequirements.length > 1 && (
-        <div className="card">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Requirement</label>
-          <select
-            value={selectedRequirement || 'all'}
-            onChange={(e) => setSelectedRequirement(e.target.value === 'all' ? null : e.target.value)}
-            className="input-field"
-          >
-            <option value="all">All Requirements</option>
-            {uniqueRequirements.map(reqId => {
-              const req = matches.find(m => m.requirement.id === reqId)?.requirement;
-              return req ? (
-                <option key={reqId} value={reqId}>{req.title}</option>
-              ) : null;
-            })}
-          </select>
+      {/* Filters */}
+      <div className="card">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {uniqueRequirements.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Requirement</label>
+              <select
+                value={selectedRequirement || 'all'}
+                onChange={(e) => setSelectedRequirement(e.target.value === 'all' ? null : e.target.value)}
+                className="input-field"
+              >
+                <option value="all">All Requirements</option>
+                {uniqueRequirements.map(reqId => {
+                  const req = matches.find(m => m.requirement.id === reqId)?.requirement;
+                  return req ? (
+                    <option key={reqId} value={reqId}>{req.title}</option>
+                  ) : null;
+                })}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Location</label>
+            <select className="input-field">
+              <option value="all">All Locations</option>
+              <option value="Bangalore">Bangalore</option>
+              <option value="Mumbai">Mumbai</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Pune">Pune</option>
+            </select>
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Match Cards */}
       <div className="space-y-6">
@@ -194,9 +208,9 @@ function MatchCard({ match }: { match: MatchRecommendation }) {
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 mb-1">Billing Rate</p>
+          <p className="text-xs text-gray-500 mb-1">Location</p>
           <p className="text-sm font-medium text-gray-900">
-            ${match.resource.billingHistory.rate}/hr
+            {match.resource.location}
           </p>
         </div>
         <div>
