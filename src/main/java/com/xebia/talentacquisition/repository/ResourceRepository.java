@@ -72,6 +72,7 @@ public interface ResourceRepository extends JpaRepository<Resource, Long> {
 
     @Query(value = "SELECT r.* FROM resources r " +
            "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:experience IS NULL OR r.total_experience >= (:experience - 5)) AND " +
            "(:skillNames IS NULL OR :skillNames = '' OR " +
            "EXISTS (SELECT 1 FROM resource_skills rs WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:skillNames, ',')))) " +
            "ORDER BY " +
@@ -80,12 +81,14 @@ public interface ResourceRepository extends JpaRepository<Resource, Long> {
            "r.name ASC",
            countQuery = "SELECT COUNT(r.id) FROM resources r " +
            "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:experience IS NULL OR r.total_experience >= (:experience - 5)) AND " +
            "(:skillNames IS NULL OR :skillNames = '' OR " +
            "EXISTS (SELECT 1 FROM resource_skills rs WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:skillNames, ','))))",
            nativeQuery = true)
     Page<Resource> findBySkillsAndLocation(
             @Param("skillNames") String skillNames,
             @Param("location") String location,
+            @Param("experience") Integer experience,
             Pageable pageable
     );
 }

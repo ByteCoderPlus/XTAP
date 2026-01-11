@@ -197,7 +197,7 @@ public class ResourceService {
                 : null;
         
         Page<Resource> resourcePage = resourceRepository.findBySkillsAndLocation(
-                skillNamesParam, searchDto.getLocation(), pageable);
+                skillNamesParam, searchDto.getLocation(), searchDto.getExperience(), pageable);
         
         List<ResourceDTO> dtos = resourcePage.getContent().stream()
                 .map(resourceMapper::toDTO)

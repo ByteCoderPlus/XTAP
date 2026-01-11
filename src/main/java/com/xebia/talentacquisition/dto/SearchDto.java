@@ -19,6 +19,8 @@ public class SearchDto {
     
     private String location;
     
+    private Integer experience; // Filter by total experience
+    
     @Builder.Default
     private Integer page = 1;
     
