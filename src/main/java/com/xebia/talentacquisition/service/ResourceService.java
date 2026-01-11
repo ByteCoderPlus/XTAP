@@ -184,6 +184,38 @@ public class ResourceService {
         return PageRequest.of(pageNumber, pageSize, sort);
     }
 
+    public PaginationResponse<ResourceDTO> getResourcesBySkills(SearchDto searchDto) {
+        
+        // For skill search, we sort by match count (handled in query), so use unsorted Pageable
+        int pageNumber = (searchDto.getPage() != null && searchDto.getPage() > 0) ? searchDto.getPage() - 1 : 0;
+        int pageSize = (searchDto.getLimit() != null && searchDto.getLimit() > 0) ? searchDto.getLimit() : 10;
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        
+        // Convert list of skills to comma-separated string for the query
+        String skillNamesParam = (searchDto.getSkills() != null && !searchDto.getSkills().isEmpty())
+                ? String.join(",", searchDto.getSkills())
+                : null;
+        
+        Page<Resource> resourcePage = resourceRepository.findBySkillsAndLocation(
+                skillNamesParam, searchDto.getLocation(), pageable);
+        
+        List<ResourceDTO> dtos = resourcePage.getContent().stream()
+                .map(resourceMapper::toDTO)
+                .collect(Collectors.toList());
+        
+        PaginationResponse.PaginationInfo paginationInfo = PaginationResponse.PaginationInfo.builder()
+                .currentPage(resourcePage.getNumber() + 1)
+                .totalPages(resourcePage.getTotalPages())
+                .totalItems(resourcePage.getTotalElements())
+                .itemsPerPage(resourcePage.getSize())
+                .build();
+        
+        return PaginationResponse.<ResourceDTO>builder()
+                .data(dtos)
+                .pagination(paginationInfo)
+                .build();
+    }
+
     public ApiResponse<ResourceDTO> softBlockResource(String employeeId, Long accountId, java.time.LocalDate blockedUntil) {
         Resource resource = resourceRepository.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Resource not found with employee ID: " + employeeId));

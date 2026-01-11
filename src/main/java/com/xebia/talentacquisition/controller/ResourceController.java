@@ -104,4 +104,11 @@ public class ResourceController {
         ApiResponse<ResourceDTO> response = resourceService.softBlockResource(empId, accountId, blockedUntil);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/search-by-skills")
+    public ResponseEntity<PaginationResponse<ResourceDTO>> getResourcesBySkills(
+            @RequestBody SearchDto searchDto) {
+        PaginationResponse<ResourceDTO> response = resourceService.getResourcesBySkills(searchDto);
+        return ResponseEntity.ok(response);
+    }
 }

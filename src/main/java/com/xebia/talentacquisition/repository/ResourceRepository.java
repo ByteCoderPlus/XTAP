@@ -69,4 +69,23 @@ public interface ResourceRepository extends JpaRepository<Resource, Long> {
             @Param("search") String search,
             Pageable pageable
     );
+
+    @Query(value = "SELECT r.* FROM resources r " +
+           "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:skillNames IS NULL OR :skillNames = '' OR " +
+           "EXISTS (SELECT 1 FROM resource_skills rs WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:skillNames, ',')))) " +
+           "ORDER BY " +
+           "CASE WHEN :skillNames IS NULL OR :skillNames = '' THEN 0 " +
+           "ELSE (SELECT COUNT(DISTINCT rs.skill_name) FROM resource_skills rs WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:skillNames, ','))) END DESC, " +
+           "r.name ASC",
+           countQuery = "SELECT COUNT(r.id) FROM resources r " +
+           "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:skillNames IS NULL OR :skillNames = '' OR " +
+           "EXISTS (SELECT 1 FROM resource_skills rs WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:skillNames, ','))))",
+           nativeQuery = true)
+    Page<Resource> findBySkillsAndLocation(
+            @Param("skillNames") String skillNames,
+            @Param("location") String location,
+            Pageable pageable
+    );
 }
