@@ -1,7 +1,0 @@
-# SQL database connectors for Python
-psycopg2-binary>=2.9.9
-mysql-connector-python>=8.2.0
-sqlalchemy>=2.0.23
-
-# Additional useful libraries
-pandas>=2.1.4
