@@ -4,6 +4,7 @@ import com.xebia.talentacquisition.dto.*;
 import com.xebia.talentacquisition.entity.*;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @Component
@@ -23,6 +24,11 @@ public class ResourceMapper {
                 .releaseDate(resource.getReleaseDate())
                 .totalExperience(resource.getTotalExperience())
                 .skills(resource.getSkills().stream().map(this::skillToDTO).collect(Collectors.toList()))
+                .softBlocks(resource.getSoftBlocks() != null 
+                        ? resource.getSoftBlocks().stream()
+                                .map(this::softBlockToDTO)
+                                .collect(Collectors.toList())
+                        : new ArrayList<>())
                 .ctc(resource.getCtc())
                 .ctcCurrency(resource.getCtcCurrency())
                 .createdAt(resource.getCreatedAt())
@@ -66,6 +72,15 @@ public class ResourceMapper {
                 .level(dto.getLevel())
                 .type(dto.getType())
                 .yearsOfExperience(dto.getYearsOfExperience())
+                .build();
+    }
+
+    public SoftBlockDTO softBlockToDTO(com.xebia.talentacquisition.entity.ResourceSoftBlock softBlock) {
+        if (softBlock == null || softBlock.getAccount() == null) return null;
+        return SoftBlockDTO.builder()
+                .accountId(softBlock.getAccount().getId())
+                .accountName(softBlock.getAccount().getName())
+                .blockedUntil(softBlock.getBlockedUntil())
                 .build();
     }
 

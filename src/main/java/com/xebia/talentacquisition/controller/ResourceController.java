@@ -95,4 +95,13 @@ public class ResourceController {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(resources);
     }
+
+    @PostMapping("/{empId}/soft-block")
+    public ResponseEntity<ApiResponse<ResourceDTO>> softBlockResource(
+            @PathVariable String empId,
+            @RequestParam Long accountId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate blockedUntil) {
+        ApiResponse<ResourceDTO> response = resourceService.softBlockResource(empId, accountId, blockedUntil);
+        return ResponseEntity.ok(response);
+    }
 }

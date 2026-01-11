@@ -69,12 +69,17 @@ public class Resource extends BaseEntity {
     @Builder.Default
     private List<Skill> skills = new ArrayList<>();
 
+
     
     @Column(name = "ctc")
     private Double ctc;
 
     @Column(name = "ctc_currency", length = 10)
     private String ctcCurrency;
+
+    @OneToMany(mappedBy = "resource", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<ResourceSoftBlock> softBlocks = new ArrayList<>();
 
     public enum ResourceStatus {
         ATP, DEPLOYED, SOFT_BLOCKED, NOTICE, LEAVE, TRAINEE, INTERVIEW_SCHEDULED

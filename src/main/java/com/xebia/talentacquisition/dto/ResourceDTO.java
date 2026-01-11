@@ -47,6 +47,9 @@ public class ResourceDTO {
     @Builder.Default
     private List<SkillDTO> skills = new ArrayList<>();
     
+    @Builder.Default
+    private List<SoftBlockDTO> softBlocks = new ArrayList<>();
+    
     private Double ctc;
     
     private String ctcCurrency;

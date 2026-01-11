@@ -1,8 +1,10 @@
 package com.xebia.talentacquisition.service;
 
 import com.xebia.talentacquisition.dto.*;
+import com.xebia.talentacquisition.entity.Account;
 import com.xebia.talentacquisition.entity.Resource;
 import com.xebia.talentacquisition.mapper.ResourceMapper;
+import com.xebia.talentacquisition.repository.AccountRepository;
 import com.xebia.talentacquisition.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 public class ResourceService {
 
     private final ResourceRepository resourceRepository;
+    private final AccountRepository accountRepository;
     private final ResourceMapper resourceMapper;
 
     public PaginationResponse<ResourceDTO> getAllResources(
@@ -179,5 +182,39 @@ public class ResourceService {
                 : Sort.by(Sort.Direction.ASC, "name");
         
         return PageRequest.of(pageNumber, pageSize, sort);
+    }
+
+    public ApiResponse<ResourceDTO> softBlockResource(String employeeId, Long accountId, java.time.LocalDate blockedUntil) {
+        Resource resource = resourceRepository.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new RuntimeException("Resource not found with employee ID: " + employeeId));
+        
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found with id: " + accountId));
+        
+        // Check if already soft-blocked by this account
+        com.xebia.talentacquisition.entity.ResourceSoftBlock existingBlock = resource.getSoftBlocks().stream()
+                .filter(sb -> sb.getAccount().getId().equals(accountId))
+                .findFirst()
+                .orElse(null);
+        
+        if (existingBlock == null) {
+            // Create new soft block
+            com.xebia.talentacquisition.entity.ResourceSoftBlock softBlock = 
+                com.xebia.talentacquisition.entity.ResourceSoftBlock.builder()
+                    .resource(resource)
+                    .account(account)
+                    .blockedUntil(blockedUntil)
+                    .build();
+            resource.getSoftBlocks().add(softBlock);
+        } else {
+            // Update existing soft block date
+            existingBlock.setBlockedUntil(blockedUntil);
+        }
+        
+        Resource savedResource = resourceRepository.save(resource);
+        
+        return ApiResponse.<ResourceDTO>builder()
+                .data(resourceMapper.toDTO(savedResource))
+                .build();
     }
 }
