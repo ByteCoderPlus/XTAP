@@ -48,8 +48,13 @@ export default function Dashboard() {
         let statsData: any = null;
         
         try {
-          resourcesData = await resourceAPI.getAllResources();
-          if (!Array.isArray(resourcesData)) {
+          const resourcesResponse = await resourceAPI.getAllResources();
+          // Handle paginated response: { data: [...], pagination: {...} }
+          if (Array.isArray(resourcesResponse)) {
+            resourcesData = resourcesResponse;
+          } else if (resourcesResponse && typeof resourcesResponse === 'object' && Array.isArray(resourcesResponse.data)) {
+            resourcesData = resourcesResponse.data;
+          } else {
             resourcesData = [];
           }
         } catch (err) {

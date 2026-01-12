@@ -4,7 +4,7 @@ import { Search, MapPin, Briefcase, Award, TrendingUp, Calendar, DollarSign, Gri
 import { Resource, ResourceStatus } from '../types';
 import Pagination from '../components/Pagination';
 import { useToastContext } from '../context/ToastContext';
-import { resourceAPI } from '../services/api';
+import { resourceAPI, extractArray } from '../services/api';
 import { mapApiResourcesToResources } from '../services/resourceMapper';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -34,6 +34,7 @@ export default function BenchDirectory() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalItemsFromAPI, setTotalItemsFromAPI] = useState<number | null>(null);
   const itemsPerPage = 9;
   const { error: showError, success } = useToastContext();
 
@@ -44,29 +45,53 @@ export default function BenchDirectory() {
         setLoading(true);
         setError(null);
         
-        const [resourcesData, locationsData, skillsData, statsData] = await Promise.all([
+        const [resourcesResponse, locationsData, skillsData, statsData] = await Promise.all([
           resourceAPI.getAllResources(),
           resourceAPI.getAvailableLocations(),
           resourceAPI.getAvailableSkills(),
           resourceAPI.getResourceStatistics(),
         ]);
 
-        // Ensure resourcesData is an array
-        if (!Array.isArray(resourcesData)) {
-          console.error('Resources data is not an array:', resourcesData);
-          throw new Error('Invalid response format: resources data is not an array');
+        // Handle paginated response: { data: [...], pagination: {...} }
+        let resourcesArray: any[] = [];
+        let paginationData: any = null;
+        
+        if (resourcesResponse && typeof resourcesResponse === 'object' && !Array.isArray(resourcesResponse)) {
+          if (Array.isArray(resourcesResponse.data)) {
+            // Paginated response
+            resourcesArray = resourcesResponse.data;
+            paginationData = resourcesResponse.pagination;
+          } else {
+            // Try to extract array using existing logic
+            const extracted = extractArray<any[]>(resourcesResponse);
+            resourcesArray = Array.isArray(extracted) ? extracted : [];
+          }
+        } else if (Array.isArray(resourcesResponse)) {
+          // Direct array response
+          resourcesArray = resourcesResponse;
+        } else {
+          console.error('Resources data is not in expected format:', resourcesResponse);
+          throw new Error('Invalid response format: resources data is not an array or paginated object');
         }
 
         // Convert API resources to app Resource type
-        const convertedResources = mapApiResourcesToResources(resourcesData);
+        const convertedResources = mapApiResourcesToResources(resourcesArray);
 
         setResources(convertedResources);
         setAllResources(convertedResources); // Store all resources for fallback
+        
+        // Store total items from pagination if available
+        if (paginationData && paginationData.totalItems) {
+          setTotalItemsFromAPI(paginationData.totalItems);
+        } else {
+          setTotalItemsFromAPI(null);
+        }
+        
         // Ensure locations and skills are arrays
         setLocations(Array.isArray(locationsData) ? locationsData : []);
         setSkills(Array.isArray(skillsData) ? skillsData : []);
         setStats({
-          total: statsData.total || convertedResources.length,
+          total: statsData.total || paginationData?.totalItems || convertedResources.length,
           atp: statsData.atp || convertedResources.filter(r => r.status === 'ATP').length,
           deployed: statsData.deployed || convertedResources.filter(r => r.status === 'deployed').length,
           softBlocked: statsData.softBlocked || convertedResources.filter(r => r.status === 'soft-blocked').length,
@@ -120,7 +145,14 @@ export default function BenchDirectory() {
             searchParams.experience = Number(selectedExperience);
           }
 
-          const searchResults = await resourceAPI.searchBySkills(searchParams);
+          const searchResponse = await resourceAPI.searchBySkills(searchParams);
+          // Handle paginated response: { data: [...], pagination: {...} }
+          let searchResults: any[] = [];
+          if (Array.isArray(searchResponse)) {
+            searchResults = searchResponse;
+          } else if (searchResponse && typeof searchResponse === 'object' && Array.isArray(searchResponse.data)) {
+            searchResults = searchResponse.data;
+          }
           const convertedResults = mapApiResourcesToResources(searchResults);
           
           // Apply status filter client-side if needed
@@ -374,14 +406,14 @@ export default function BenchDirectory() {
         </div>
         <div className="flex items-center gap-4">
           {/* Search Bar - Moved to right, larger size */}
-          <div className="relative w-96">
+          <div className="relative w-[500px]">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search by name, email, skills..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-12 pr-4 py-3 text-base w-full"
+              className="input-field pl-12 pr-4 py-3.5 text-base w-full"
             />
           </div>
           <button onClick={handleExport} className="btn-primary whitespace-nowrap">
@@ -396,7 +428,7 @@ export default function BenchDirectory() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Resources</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{totalItemsFromAPI !== null ? totalItemsFromAPI : stats.total}</p>
             </div>
             <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-primary-600" />

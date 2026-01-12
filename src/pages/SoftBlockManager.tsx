@@ -28,13 +28,22 @@ export default function SoftBlockManager() {
       try {
         setLoading(true);
         setError(null);
-        const [resourcesData, accountsData] = await Promise.all([
+        const [resourcesResponse, accountsData] = await Promise.all([
           resourceAPI.getAllResources(),
           accountAPI.getAllAccounts(),
         ]);
         
-        // Ensure data is arrays
-        const resourcesArray = Array.isArray(resourcesData) ? resourcesData : [];
+        // Handle paginated response: { data: [...], pagination: {...} }
+        let resourcesArray: any[] = [];
+        if (Array.isArray(resourcesResponse)) {
+          resourcesArray = resourcesResponse;
+        } else if (resourcesResponse && typeof resourcesResponse === 'object' && Array.isArray(resourcesResponse.data)) {
+          resourcesArray = resourcesResponse.data;
+        } else {
+          resourcesArray = [];
+        }
+        
+        // Ensure accounts is an array
         const accountsArray = Array.isArray(accountsData) ? accountsData : [];
         
         setResources(resourcesArray);

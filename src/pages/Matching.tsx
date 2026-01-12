@@ -22,10 +22,16 @@ export default function Matching() {
       try {
         setLoading(true);
         setError(null);
-        const resourcesData = await resourceAPI.getAllResources();
+        const resourcesResponse = await resourceAPI.getAllResources();
         
-        if (!Array.isArray(resourcesData)) {
-          throw new Error('Invalid response format: resources data is not an array');
+        // Handle paginated response: { data: [...], pagination: {...} }
+        let resourcesData: any[] = [];
+        if (Array.isArray(resourcesResponse)) {
+          resourcesData = resourcesResponse;
+        } else if (resourcesResponse && typeof resourcesResponse === 'object' && Array.isArray(resourcesResponse.data)) {
+          resourcesData = resourcesResponse.data;
+        } else {
+          throw new Error('Invalid response format: resources data is not an array or paginated object');
         }
 
         // Convert API resources to app Resource type

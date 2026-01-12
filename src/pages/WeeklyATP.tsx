@@ -30,7 +30,14 @@ export default function WeeklyATP() {
         let resourcesData: any[] = [];
         try {
           const data = await resourceAPI.getAllResources();
-          resourcesData = Array.isArray(data) ? data : [];
+          // Handle paginated response: { data: [...], pagination: {...} }
+          if (Array.isArray(data)) {
+            resourcesData = data;
+          } else if (data && typeof data === 'object' && Array.isArray(data.data)) {
+            resourcesData = data.data;
+          } else {
+            resourcesData = [];
+          }
         } catch (err) {
           console.error('Failed to fetch resources:', err);
           resourcesData = [];

@@ -147,7 +147,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 // Helper function to extract array from API response
-function extractArray<T>(response: T | { data: T } | { content: T } | any): T {
+export function extractArray<T>(response: T | { data: T } | { content: T } | any): T {
   if (import.meta.env.DEV) {
     console.log('Extracting array from response. Type:', typeof response, 'Is Array:', Array.isArray(response), 'Response:', response);
   }
@@ -182,8 +182,14 @@ function extractArray<T>(response: T | { data: T } | { content: T } | any): T {
 
 // Resource APIs
 export const resourceAPI = {
-  getAllResources: async (): Promise<ApiResource[]> => {
+  getAllResources: async (): Promise<ApiResource[] | { data: ApiResource[]; pagination?: any }> => {
     const response = await fetchAPI<any>('/api/v1/resources');
+    // Handle paginated response: { data: [...], pagination: {...} }
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      if (Array.isArray(response.data)) {
+        return response; // Return full response with pagination
+      }
+    }
     const array = extractArray<ApiResource[]>(response);
     return Array.isArray(array) ? array : [];
   },
@@ -287,7 +293,7 @@ export const resourceAPI = {
     experience?: number;
     page?: number;
     limit?: number | string;
-  }): Promise<ApiResource[]> => {
+  }): Promise<ApiResource[] | { data: ApiResource[]; pagination?: any }> => {
     const response = await fetchAPI<any>('/api/v1/resources/search-by-skills', {
       method: 'POST',
       body: JSON.stringify({
@@ -298,6 +304,12 @@ export const resourceAPI = {
         limit: params.limit || 10,
       }),
     });
+    // Handle paginated response: { data: [...], pagination: {...} }
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      if (Array.isArray(response.data)) {
+        return response; // Return full response with pagination
+      }
+    }
     const array = extractArray<ApiResource[]>(response);
     return Array.isArray(array) ? array : [];
   },

@@ -28,9 +28,17 @@ export default function GlobalSearch() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const resourcesData = await resourceAPI.getAllResources();
+        const resourcesResponse = await resourceAPI.getAllResources();
         
-        if (Array.isArray(resourcesData)) {
+        // Handle paginated response: { data: [...], pagination: {...} }
+        let resourcesData: any[] = [];
+        if (Array.isArray(resourcesResponse)) {
+          resourcesData = resourcesResponse;
+        } else if (resourcesResponse && typeof resourcesResponse === 'object' && Array.isArray(resourcesResponse.data)) {
+          resourcesData = resourcesResponse.data;
+        }
+        
+        if (resourcesData.length > 0) {
           const convertedResources = mapApiResourcesToResources(resourcesData);
           setResources(convertedResources);
 

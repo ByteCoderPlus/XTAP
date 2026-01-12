@@ -42,12 +42,12 @@ export default function Layout({ children }: LayoutProps) {
           {/* Logo and Brand */}
           <div className="flex flex-col py-3 px-6 border-b border-gray-200 min-h-[4rem] justify-center">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center flex-shrink-0">
+              {/* <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-sm">X</span>
-              </div>
+              </div> */}
               <h1 className="text-lg font-bold text-purple-700">XTAP</h1>
             </div>
-            <p className="text-xs text-purple-600 mt-0.5 ml-10 leading-tight">Connecting Potential with Opportunity using AI</p>
+            <p className="text-xs text-purple-600 mt-0.5 leading-tight ">Connecting Potential with Opportunity</p>
           </div>
 
           {/* Navigation */}
@@ -93,7 +93,7 @@ export default function Layout({ children }: LayoutProps) {
                     </div>
                     <h1 className="text-lg font-bold text-purple-700">XTAP</h1>
                   </div>
-                  <p className="text-xs text-purple-600 ml-10">Connecting Potential with Opportunity using AI</p>
+                  <p className="text-xs text-purple-600 ml-10 px-2">Connecting Potential with Opportunity using AI</p>
                 </div>
                 <button
                   onClick={() => setSidebarOpen(false)}
