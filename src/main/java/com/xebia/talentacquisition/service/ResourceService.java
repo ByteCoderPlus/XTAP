@@ -7,12 +7,14 @@ import com.xebia.talentacquisition.mapper.ResourceMapper;
 import com.xebia.talentacquisition.repository.AccountRepository;
 import com.xebia.talentacquisition.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.logging.log4j.util.Strings;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -195,9 +197,10 @@ public class ResourceService {
         String skillNamesParam = (searchDto.getSkills() != null && !searchDto.getSkills().isEmpty())
                 ? String.join(",", searchDto.getSkills())
                 : null;
+        String locationParam = Strings.isNotBlank(searchDto.getLocation()) ? searchDto.getLocation() : null;
         
         Page<Resource> resourcePage = resourceRepository.findBySkillsAndLocation(
-                skillNamesParam, searchDto.getLocation(), searchDto.getExperience(), pageable);
+                skillNamesParam, locationParam, searchDto.getExperience(), pageable);
         
         List<ResourceDTO> dtos = resourcePage.getContent().stream()
                 .map(resourceMapper::toDTO)
@@ -208,6 +211,82 @@ public class ResourceService {
                 .totalPages(resourcePage.getTotalPages())
                 .totalItems(resourcePage.getTotalElements())
                 .itemsPerPage(resourcePage.getSize())
+                .build();
+        
+        return PaginationResponse.<ResourceDTO>builder()
+                .data(dtos)
+                .pagination(paginationInfo)
+                .build();
+    }
+
+    public PaginationResponse<ResourceDTO> searchByPrimaryAndSecondarySkills(
+            com.xebia.talentacquisition.dto.SkillBasedSearchDto searchDto) {
+        
+        // Validate primary skills are provided
+        if (searchDto.getPrimarySkills() == null || searchDto.getPrimarySkills().isEmpty()) {
+            throw new RuntimeException("Primary skills are required");
+        }
+        
+        // For skill search, we sort by match count (handled in query), so use unsorted Pageable
+        int pageNumber = 0;
+        int pageSize = 1000; // Large page size to get all results for in-memory filtering
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        
+        // Convert lists to comma-separated strings for the query
+        String primarySkillsParam = (searchDto.getPrimarySkills() != null && !searchDto.getPrimarySkills().isEmpty())
+                ? String.join(",", searchDto.getPrimarySkills())
+                : null;
+        
+        String secondarySkillsParam = (searchDto.getSecondarySkills() != null && !searchDto.getSecondarySkills().isEmpty())
+                ? String.join(",", searchDto.getSecondarySkills())
+                : null;
+        
+        Page<Resource> resourcePage = resourceRepository.findByPrimaryAndSecondarySkills(
+                primarySkillsParam, secondarySkillsParam, 
+                searchDto.getLocation(), searchDto.getExperience(), pageable);
+        
+        // Filter by skill experience requirements if provided
+        // Also count total matched skills for sorting (primary + secondary matches)
+        List<Resource> filteredResources = resourcePage.getContent();
+        if (searchDto.getSkillExperienceMap() != null && !searchDto.getSkillExperienceMap().isEmpty()) {
+            filteredResources = resourcePage.getContent().stream()
+                    .filter(resource -> {
+                        for (Map.Entry<String, Integer> entry : searchDto.getSkillExperienceMap().entrySet()) {
+                            String skillName = entry.getKey();
+                            Integer requiredExperience = entry.getValue();
+                            
+                            // Check if resource has this skill with required experience (as PRIMARY or SECONDARY)
+                            boolean hasRequiredExperience = resource.getSkills().stream()
+                                    .anyMatch(skill -> skill.getName().equals(skillName) 
+                                            && skill.getYearsOfExperience() != null 
+                                            && skill.getYearsOfExperience() >= requiredExperience);
+                            
+                            if (!hasRequiredExperience) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+        }
+        
+        // Resources are already sorted by total matched skills (primary + secondary) from the query
+        // The query sorts by (primary matches + secondary matches) descending, then by name
+        // Secondary skills are "good to have" - resources are returned even without them
+        
+        List<ResourceDTO> dtos = filteredResources.stream()
+                .map(resourceMapper::toDTO)
+                .collect(Collectors.toList());
+        
+        // Calculate pagination info manually since we filtered in memory
+        int totalItems = filteredResources.size();
+        int totalPages = 1; // Since we fetch all and filter in memory
+        
+        PaginationResponse.PaginationInfo paginationInfo = PaginationResponse.PaginationInfo.builder()
+                .currentPage(1)
+                .totalPages(totalPages)
+                .totalItems((long) totalItems)
+                .itemsPerPage(totalItems > 0 ? totalItems : 1)
                 .build();
         
         return PaginationResponse.<ResourceDTO>builder()

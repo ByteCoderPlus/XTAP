@@ -91,4 +91,33 @@ public interface ResourceRepository extends JpaRepository<Resource, Long> {
             @Param("experience") Integer experience,
             Pageable pageable
     );
+
+    @Query(value = "SELECT r.* FROM resources r " +
+           "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:experience IS NULL OR r.total_experience >= (:experience - 5)) AND " +
+           "(:primarySkills IS NULL OR :primarySkills = '' OR " +
+           "(SELECT COUNT(DISTINCT rs.skill_name) FROM resource_skills rs " +
+           "WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:primarySkills, ','))) = " +
+           "array_length(string_to_array(:primarySkills, ','), 1)) " +
+           "ORDER BY " +
+           "(COALESCE((SELECT COUNT(DISTINCT rs.skill_name) FROM resource_skills rs " +
+           "WHERE rs.resource_id = r.id AND (:primarySkills IS NULL OR :primarySkills = '' OR rs.skill_name::text = ANY(string_to_array(:primarySkills, ',')))), 0) + " +
+           "COALESCE((SELECT COUNT(DISTINCT rs.skill_name) FROM resource_skills rs " +
+           "WHERE rs.resource_id = r.id AND (:secondarySkills IS NULL OR :secondarySkills = '' OR rs.skill_name::text = ANY(string_to_array(:secondarySkills, ',')))), 0)) DESC, " +
+           "r.name ASC",
+           countQuery = "SELECT COUNT(r.id) FROM resources r " +
+           "WHERE (:location IS NULL OR r.location::text = :location) AND " +
+           "(:experience IS NULL OR r.total_experience >= (:experience - 5)) AND " +
+           "(:primarySkills IS NULL OR :primarySkills = '' OR " +
+           "(SELECT COUNT(DISTINCT rs.skill_name) FROM resource_skills rs " +
+           "WHERE rs.resource_id = r.id AND rs.skill_name::text = ANY(string_to_array(:primarySkills, ','))) = " +
+           "array_length(string_to_array(:primarySkills, ','), 1))",
+           nativeQuery = true)
+    Page<Resource> findByPrimaryAndSecondarySkills(
+            @Param("primarySkills") String primarySkills,
+            @Param("secondarySkills") String secondarySkills,
+            @Param("location") String location,
+            @Param("experience") Integer experience,
+            Pageable pageable
+    );
 }

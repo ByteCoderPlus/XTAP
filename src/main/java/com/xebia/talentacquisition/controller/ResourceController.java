@@ -111,4 +111,11 @@ public class ResourceController {
         PaginationResponse<ResourceDTO> response = resourceService.getResourcesBySkills(searchDto);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/search-by-primary-secondary-skills")
+    public ResponseEntity<PaginationResponse<ResourceDTO>> searchByPrimaryAndSecondarySkills(
+            @RequestBody com.xebia.talentacquisition.dto.SkillBasedSearchDto searchDto) {
+        PaginationResponse<ResourceDTO> response = resourceService.searchByPrimaryAndSecondarySkills(searchDto);
+        return ResponseEntity.ok(response);
+    }
 }
