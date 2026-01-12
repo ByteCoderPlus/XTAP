@@ -49,13 +49,17 @@ export interface BillingHistory {
 }
 
 export interface SoftBlock {
-  id: string;
-  resourceId: string;
-  reason: string;
-  startDate: string;
-  endDate: string;
-  createdBy: string;
-  createdAt: string;
+  id?: string;
+  resourceId?: string;
+  reason?: string;
+  startDate?: string;
+  endDate?: string;
+  createdBy?: string;
+  createdAt?: string;
+  // API response structure
+  accountId?: number;
+  accountName?: string;
+  blockedUntil?: string;
 }
 
 export interface Consideration {
@@ -80,6 +84,7 @@ export interface Resource {
   status: ResourceStatus;
   availabilityDate?: string;
   releaseDate?: string;
+  totalExperience?: number;
   skills: Skill[];
   certifications: Certification[];
   projectExperience: ProjectExperience[];

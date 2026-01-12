@@ -1,26 +1,72 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, MapPin, Briefcase, Award, Calendar, DollarSign, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import { Resource } from '../types';
-import { mockResources } from '../data/mockData';
 import Breadcrumbs from '../components/Breadcrumbs';
+import { resourceAPI } from '../services/api';
+import { mapApiResourceToResource } from '../services/resourceMapper';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function ResourceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const resource = mockResources.find(r => r.id === id);
+  const [resource, setResource] = useState<Resource | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!resource) {
+  useEffect(() => {
+    const fetchResource = async () => {
+      if (!id) return;
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await resourceAPI.getResourceById(id);
+        
+        // Convert API resource to app Resource type
+        const convertedResource = mapApiResourceToResource(data);
+        
+        // Ensure we have the ID from the route if not in data
+        if (!convertedResource.id && !convertedResource.employeeId) {
+          convertedResource.id = id;
+          convertedResource.employeeId = id;
+        }
+        
+        console.log('Resource data received:', data);
+        console.log('Converted resource:', convertedResource);
+        setResource(convertedResource);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load resource';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResource();
+  }, [id]);
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error || !resource) {
     return (
       <div className="card text-center py-12">
-        <p className="text-gray-500 mb-4">Resource not found</p>
+        <p className="text-red-600 mb-4">{error || 'Resource not found'}</p>
         <Link to="/bench" className="btn-primary">Back to Bench Directory</Link>
       </div>
     );
   }
 
-  const primarySkills = resource.skills.filter(s => s.type === 'primary');
-  const secondarySkills = resource.skills.filter(s => s.type === 'secondary');
-  const activeSoftBlocks = resource.softBlocks.filter(sb => new Date(sb.endDate) > new Date());
+  const primarySkills = Array.isArray(resource.skills) 
+    ? resource.skills.filter(s => s && s.type === 'primary')
+    : [];
+  const secondarySkills = Array.isArray(resource.skills)
+    ? resource.skills.filter(s => s && s.type === 'secondary')
+    : [];
+  const activeSoftBlocks = Array.isArray(resource.softBlocks)
+    ? resource.softBlocks.filter(sb => sb && sb.endDate && new Date(sb.endDate) > new Date())
+    : [];
 
   return (
     <div className="space-y-6">
@@ -102,21 +148,25 @@ export default function ResourceDetail() {
           {/* Primary Skills */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Primary Skills</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {primarySkills.map((skill, idx) => (
-                <div key={idx} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-900">{skill.name}</span>
-                    <span className="text-xs text-gray-500 capitalize">{skill.level}</span>
+            {primarySkills.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4">
+                {primarySkills.map((skill, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-900">{skill?.name || 'N/A'}</span>
+                      <span className="text-xs text-gray-500 capitalize">{skill?.level || 'N/A'}</span>
+                    </div>
+                    {skill?.yearsOfExperience && (
+                      <p className="text-sm text-gray-600">
+                        {skill.yearsOfExperience} years experience
+                      </p>
+                    )}
                   </div>
-                  {skill.yearsOfExperience && (
-                    <p className="text-sm text-gray-600">
-                      {skill.yearsOfExperience} years experience
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No primary skills listed</p>
+            )}
           </div>
 
           {/* Secondary Skills */}
@@ -137,7 +187,7 @@ export default function ResourceDetail() {
           )}
 
           {/* Certifications */}
-          {resource.certifications.length > 0 && (
+          {Array.isArray(resource.certifications) && resource.certifications.length > 0 && (
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <Award className="w-5 h-5 mr-2 text-primary-600" />
@@ -148,14 +198,14 @@ export default function ResourceDetail() {
                   <div key={idx} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-gray-900">{cert.name}</p>
-                        <p className="text-sm text-gray-600">{cert.issuer}</p>
+                        <p className="font-medium text-gray-900">{cert?.name || 'Unknown Certification'}</p>
+                        <p className="text-sm text-gray-600">{cert?.issuer || 'N/A'}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">
-                          Issued: {new Date(cert.issueDate).toLocaleDateString()}
+                          Issued: {cert?.issueDate ? new Date(cert.issueDate).toLocaleDateString() : 'N/A'}
                         </p>
-                        {cert.expiryDate && (
+                        {cert?.expiryDate && (
                           <p className="text-xs text-gray-500">
                             Expires: {new Date(cert.expiryDate).toLocaleDateString()}
                           </p>
@@ -169,7 +219,7 @@ export default function ResourceDetail() {
           )}
 
           {/* Project Experience */}
-          {resource.projectExperience.length > 0 && (
+          {Array.isArray(resource.projectExperience) && resource.projectExperience.length > 0 && (
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Experience</h2>
               <div className="space-y-4">
@@ -177,24 +227,26 @@ export default function ResourceDetail() {
                   <div key={idx} className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{project.projectName}</h3>
-                        <p className="text-sm text-gray-600">{project.domain} • {project.role}</p>
+                        <h3 className="font-semibold text-gray-900">{project?.projectName || 'Unknown Project'}</h3>
+                        <p className="text-sm text-gray-600">{project?.domain || 'N/A'} • {project?.role || 'N/A'}</p>
                       </div>
                       <div className="text-right text-sm text-gray-500">
-                        <p>{new Date(project.startDate).toLocaleDateString()}</p>
-                        <p>{project.endDate ? `- ${new Date(project.endDate).toLocaleDateString()}` : '- Present'}</p>
+                        <p>{project?.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'}</p>
+                        <p>{project?.endDate ? `- ${new Date(project.endDate).toLocaleDateString()}` : project?.startDate ? '- Present' : ''}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {project.technologies.map((tech, techIdx) => (
-                        <span
-                          key={techIdx}
-                          className="inline-flex items-center px-2 py-1 rounded text-xs bg-primary-50 text-primary-700"
-                        >
-                          {tech}
-                        </span>
-                      ))}
-                    </div>
+                    {Array.isArray(project?.technologies) && project.technologies.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {project.technologies.map((tech, techIdx) => (
+                          <span
+                            key={techIdx}
+                            className="inline-flex items-center px-2 py-1 rounded text-xs bg-primary-50 text-primary-700"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

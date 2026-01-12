@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Filter, Calendar, MapPin, Briefcase, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
-import { Requirement } from '../types';
-import { mockRequirements } from '../data/mockData';
+import { Requirement, Resource } from '../types';
+import { resourceAPI } from '../services/api';
+import { mapApiResourcesToResources } from '../services/resourceMapper';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useToastContext } from '../context/ToastContext';
 
 const priorityColors = {
   low: 'bg-gray-100 text-gray-800',
@@ -18,15 +21,129 @@ const statusColors = {
 };
 
 export default function Requirements() {
-  const [requirements] = useState<Requirement[]>(mockRequirements);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { error: showError } = useToastContext();
 
-  const filteredRequirements = requirements.filter(req =>
-    req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.domain.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const resourcesData = await resourceAPI.getAllResources();
+        
+        if (!Array.isArray(resourcesData)) {
+          throw new Error('Invalid response format: resources data is not an array');
+        }
+
+        const convertedResources = mapApiResourcesToResources(resourcesData);
+
+        setResources(convertedResources);
+
+        // Derive requirements from resource considerations
+        const requirementMap = new Map<string, Requirement>();
+
+        convertedResources.forEach(resource => {
+          if (Array.isArray(resource.considerations)) {
+            resource.considerations.forEach((consideration: any) => {
+              if (consideration.requirementId && !requirementMap.has(consideration.requirementId)) {
+                requirementMap.set(consideration.requirementId, {
+                  id: consideration.requirementId,
+                  title: consideration.requirementTitle || `Requirement ${consideration.requirementId}`,
+                  description: consideration.requirementDescription || 'Derived from resource considerations',
+                  requiredSkills: consideration.requiredSkills || [],
+                  preferredSkills: consideration.preferredSkills || [],
+                  experienceLevel: consideration.experienceLevel || 'Not specified',
+                  location: consideration.location || resource.location || 'Not specified',
+                  domain: consideration.domain || 'General',
+                  startDate: consideration.startDate || new Date().toISOString().split('T')[0],
+                  status: consideration.status || 'open',
+                  priority: consideration.priority || 'medium',
+                  createdBy: consideration.createdBy || 'System',
+                  createdAt: consideration.createdAt || new Date().toISOString(),
+                  updatedAt: consideration.updatedAt || new Date().toISOString(),
+                });
+              }
+            });
+          }
+        });
+
+        // If no requirements from considerations, create sample ones based on common skills
+        if (requirementMap.size === 0) {
+          const skillCounts = new Map<string, number>();
+          convertedResources.forEach(r => {
+            if (Array.isArray(r.skills)) {
+              r.skills.forEach(s => {
+                if (s.type === 'primary') {
+                  skillCounts.set(s.name, (skillCounts.get(s.name) || 0) + 1);
+                }
+              });
+            }
+          });
+
+          Array.from(skillCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .forEach(([skill, count]) => {
+              const reqId = `req-${skill.toLowerCase().replace(/\s+/g, '-')}`;
+              requirementMap.set(reqId, {
+                id: reqId,
+                title: `Senior ${skill} Developer`,
+                description: `Looking for an experienced ${skill} developer. ${count} available resources with this skill.`,
+                requiredSkills: [{ name: skill, level: 'advanced', type: 'primary' }],
+                preferredSkills: [],
+                experienceLevel: '5+ years',
+                location: 'Multiple',
+                domain: 'Technology',
+                startDate: new Date().toISOString().split('T')[0],
+                status: 'open',
+                priority: count > 3 ? 'high' : 'medium',
+                createdBy: 'System',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+            });
+        }
+
+        setRequirements(Array.from(requirementMap.values()));
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load requirements';
+        setError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [showError]);
+
+  const filteredRequirements = useMemo(() => {
+    return requirements.filter(req =>
+      req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.domain.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [requirements, searchTerm]);
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="card text-center py-12">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -111,13 +228,13 @@ export default function Requirements() {
       </div>
 
       {/* Requirements List */}
-      <div className="space-y-4">
-        {filteredRequirements.map((requirement) => (
-          <RequirementCard key={requirement.id} requirement={requirement} />
-        ))}
-      </div>
-
-      {filteredRequirements.length === 0 && (
+      {filteredRequirements.length > 0 ? (
+        <div className="space-y-4">
+          {filteredRequirements.map((requirement) => (
+            <RequirementCard key={requirement.id} requirement={requirement} />
+          ))}
+        </div>
+      ) : (
         <div className="card text-center py-12">
           <p className="text-gray-500">No requirements found.</p>
         </div>

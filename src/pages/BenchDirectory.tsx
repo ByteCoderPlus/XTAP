@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, MapPin, Briefcase, Award, TrendingUp, Calendar, DollarSign, Grid, List } from 'lucide-react';
 import { Resource, ResourceStatus } from '../types';
-import { mockResources } from '../data/mockData';
 import Pagination from '../components/Pagination';
 import { useToastContext } from '../context/ToastContext';
+import { resourceAPI } from '../services/api';
+import { mapApiResourcesToResources } from '../services/resourceMapper';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const statusColors: Record<ResourceStatus, string> = {
   ATP: 'bg-green-100 text-green-800',
@@ -21,38 +23,187 @@ export default function BenchDirectory() {
   const [selectedStatus, setSelectedStatus] = useState<ResourceStatus | 'all'>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedSkill, setSelectedSkill] = useState<string>('all');
+  const [selectedExperience, setSelectedExperience] = useState<number | ''>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]); // Store all resources for fallback
+  const [locations, setLocations] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [stats, setStats] = useState({ total: 0, atp: 0, deployed: 0, softBlocked: 0 });
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const itemsPerPage = 9;
+  const { error: showError, success } = useToastContext();
 
-  const locations = useMemo(() => {
-    const locs = new Set(mockResources.map(r => r.location));
-    return Array.from(locs);
-  }, []);
+  // Fetch resources and related data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [resourcesData, locationsData, skillsData, statsData] = await Promise.all([
+          resourceAPI.getAllResources(),
+          resourceAPI.getAvailableLocations(),
+          resourceAPI.getAvailableSkills(),
+          resourceAPI.getResourceStatistics(),
+        ]);
 
-  const skills = useMemo(() => {
-    const skillSet = new Set<string>();
-    mockResources.forEach(r => {
-      r.skills.forEach(s => skillSet.add(s.name));
-    });
-    return Array.from(skillSet);
-  }, []);
+        // Ensure resourcesData is an array
+        if (!Array.isArray(resourcesData)) {
+          console.error('Resources data is not an array:', resourcesData);
+          throw new Error('Invalid response format: resources data is not an array');
+        }
+
+        // Convert API resources to app Resource type
+        const convertedResources = mapApiResourcesToResources(resourcesData);
+
+        setResources(convertedResources);
+        setAllResources(convertedResources); // Store all resources for fallback
+        // Ensure locations and skills are arrays
+        setLocations(Array.isArray(locationsData) ? locationsData : []);
+        setSkills(Array.isArray(skillsData) ? skillsData : []);
+        setStats({
+          total: statsData.total || convertedResources.length,
+          atp: statsData.atp || convertedResources.filter(r => r.status === 'ATP').length,
+          deployed: statsData.deployed || convertedResources.filter(r => r.status === 'deployed').length,
+          softBlocked: statsData.softBlocked || convertedResources.filter(r => r.status === 'soft-blocked').length,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load resources';
+        setError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [showError]);
+
+  // Use API search when skill, location, or experience filters are applied
+  useEffect(() => {
+    const shouldUseAPISearch = 
+      selectedSkill !== 'all' || 
+      selectedLocation !== 'all' || 
+      (selectedExperience !== '' && selectedExperience !== null);
+
+    if (shouldUseAPISearch && allResources.length > 0) {
+      const performAPISearch = async () => {
+        try {
+          setSearching(true);
+          const skillsToSearch = selectedSkill !== 'all' ? [selectedSkill] : [];
+          
+          // If search term contains skill names, add them to skills array
+          if (searchTerm.trim()) {
+            const searchLower = searchTerm.toLowerCase();
+            skills.forEach(skill => {
+              if (skill.toLowerCase().includes(searchLower) && !skillsToSearch.includes(skill)) {
+                skillsToSearch.push(skill);
+              }
+            });
+          }
+
+          const searchParams: any = {
+            skills: skillsToSearch,
+            page: currentPage - 1,
+            limit: itemsPerPage,
+          };
+
+          if (selectedLocation !== 'all') {
+            searchParams.location = selectedLocation;
+          }
+
+          if (selectedExperience !== '' && selectedExperience !== null) {
+            searchParams.experience = Number(selectedExperience);
+          }
+
+          const searchResults = await resourceAPI.searchBySkills(searchParams);
+          const convertedResults = mapApiResourcesToResources(searchResults);
+          
+          // Apply status filter client-side if needed
+          let filtered = convertedResults;
+          if (selectedStatus !== 'all') {
+            filtered = convertedResults.filter(r => r.status === selectedStatus);
+          }
+
+          // Apply search term filter client-side if needed
+          if (searchTerm.trim() && skillsToSearch.length === 0) {
+            filtered = filtered.filter(resource => {
+              const matchesSearch = 
+                (resource.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (resource.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (resource.designation || '').toLowerCase().includes(searchTerm.toLowerCase());
+              return matchesSearch;
+            });
+          }
+
+          setResources(filtered);
+        } catch (err) {
+          console.error('API search failed, using local filter:', err);
+          // Fallback to local filtering
+          setResources(allResources);
+        } finally {
+          setSearching(false);
+        }
+      };
+
+      performAPISearch();
+    } else if (allResources.length > 0) {
+      // Use local filtering when no API search criteria
+      setResources(allResources);
+    }
+  }, [selectedSkill, selectedLocation, selectedExperience, currentPage, searchTerm, allResources, skills, itemsPerPage, selectedStatus]);
 
   const filteredResources = useMemo(() => {
-    return mockResources.filter(resource => {
+    if (!Array.isArray(resources) || resources.length === 0) {
+      return [];
+    }
+    
+    // If using API search, resources are already filtered, just apply search term and status
+    if (selectedSkill !== 'all' || selectedLocation !== 'all' || (selectedExperience !== '' && selectedExperience !== null)) {
+      // API search already applied skill, location, and experience filters
+      // Just apply search term and status client-side
+      return resources.filter(resource => {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm.trim() || 
+          (resource.name || '').toLowerCase().includes(searchLower) ||
+          (resource.email || '').toLowerCase().includes(searchLower) ||
+          (resource.designation || '').toLowerCase().includes(searchLower) ||
+          (Array.isArray(resource.skills) && resource.skills.some(s => (s?.name || '').toLowerCase().includes(searchLower)));
+
+        const matchesStatus = selectedStatus === 'all' || resource.status === selectedStatus;
+        
+        // Double-check experience filter in case API didn't apply it correctly
+        const matchesExperience = selectedExperience === '' || selectedExperience === null || 
+          (resource.totalExperience !== undefined && resource.totalExperience >= Number(selectedExperience));
+
+        return matchesSearch && matchesStatus && matchesExperience;
+      });
+    }
+    
+    // Local filtering for all criteria
+    return resources.filter(resource => {
+      const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
-        resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.skills.some(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        (resource.name || '').toLowerCase().includes(searchLower) ||
+        (resource.email || '').toLowerCase().includes(searchLower) ||
+        (resource.designation || '').toLowerCase().includes(searchLower) ||
+        (Array.isArray(resource.skills) && resource.skills.some(s => (s?.name || '').toLowerCase().includes(searchLower)));
 
       const matchesStatus = selectedStatus === 'all' || resource.status === selectedStatus;
       const matchesLocation = selectedLocation === 'all' || resource.location === selectedLocation;
-      const matchesSkill = selectedSkill === 'all' || resource.skills.some(s => s.name === selectedSkill);
+      const matchesSkill = selectedSkill === 'all' || (Array.isArray(resource.skills) && resource.skills.some(s => s?.name === selectedSkill));
+      
+      // Experience filter: check if resource's totalExperience meets minimum requirement
+      const matchesExperience = selectedExperience === '' || selectedExperience === null || 
+        (resource.totalExperience !== undefined && resource.totalExperience >= Number(selectedExperience));
 
-      return matchesSearch && matchesStatus && matchesLocation && matchesSkill;
+      return matchesSearch && matchesStatus && matchesLocation && matchesSkill && matchesExperience;
     });
-  }, [searchTerm, selectedStatus, selectedLocation, selectedSkill]);
+  }, [resources, searchTerm, selectedStatus, selectedLocation, selectedSkill, selectedExperience]);
 
   const totalPages = Math.ceil(filteredResources.length / itemsPerPage);
   const paginatedResources = useMemo(() => {
@@ -61,29 +212,182 @@ export default function BenchDirectory() {
   }, [filteredResources, currentPage, itemsPerPage]);
 
   // Reset to page 1 when filters change
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedStatus, selectedLocation, selectedSkill]);
+  }, [searchTerm, selectedStatus, selectedLocation, selectedSkill, selectedExperience]);
 
-  const stats = useMemo(() => {
-    const total = mockResources.length;
-    const atp = mockResources.filter(r => r.status === 'ATP').length;
-    const deployed = mockResources.filter(r => r.status === 'deployed').length;
-    const softBlocked = mockResources.filter(r => r.status === 'soft-blocked').length;
-    return { total, atp, deployed, softBlocked };
-  }, []);
+  const handleExport = async () => {
+    try {
+      // Try API export first
+      try {
+        const blob = await resourceAPI.exportResources();
+        
+        // Check if blob is actually valid (has size > 0)
+        if (blob.size === 0) {
+          throw new Error('API returned empty file');
+        }
+        
+        // Check if it's JSON (API error response)
+        const firstBytes = await blob.slice(0, 1).arrayBuffer();
+        const firstByte = new Uint8Array(firstBytes)[0];
+        // JSON typically starts with '{' (0x7B) or '[' (0x5B)
+        if (firstByte === 0x7B || firstByte === 0x5B) {
+          const text = await blob.text();
+          try {
+            const json = JSON.parse(text);
+            throw new Error(json.message || json.error || 'API returned JSON instead of Excel file');
+          } catch {
+            throw new Error('API returned invalid response format');
+          }
+        }
+        
+        // Ensure the blob has the correct MIME type for Excel
+        const excelBlob = blob.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+          ? blob 
+          : new Blob([blob], { 
+              type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+        
+        const url = window.URL.createObjectURL(excelBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resources-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up after a short delay
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+        
+        success('Resources exported successfully');
+        return;
+      } catch (apiError) {
+        console.warn('API export failed, falling back to CSV export:', apiError);
+        // Fall through to CSV export
+      }
+      
+      // Fallback: Generate CSV export client-side
+      const csvData = generateCSVExport(filteredResources);
+      const csvBlob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(csvBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resources-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
+      
+      success('Resources exported as CSV successfully');
+    } catch (err) {
+      console.error('Export error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export resources';
+      showError(errorMessage);
+    }
+  };
+
+  // Helper function to generate CSV export
+  const generateCSVExport = (resourcesToExport: Resource[]): string => {
+    const headers = [
+      'Employee ID',
+      'Name',
+      'Email',
+      'Designation',
+      'Location',
+      'Status',
+      'Availability Date',
+      'Release Date',
+      'Primary Skills',
+      'CTC',
+      'Currency',
+    ];
+    
+    const rows = resourcesToExport.map(resource => {
+      const primarySkills = Array.isArray(resource.skills)
+        ? resource.skills
+            .filter(s => s && s.type === 'primary')
+            .map(s => `${s.name} (${s.level})`)
+            .join('; ')
+        : '';
+      
+      return [
+        resource.employeeId || resource.id || '',
+        resource.name || '',
+        resource.email || '',
+        resource.designation || '',
+        resource.location || '',
+        resource.status || '',
+        resource.availabilityDate || '',
+        resource.releaseDate || '',
+        primarySkills,
+        resource.ctc?.toString() || '',
+        resource.ctcCurrency || 'INR',
+      ];
+    });
+    
+    // Escape CSV values (handle commas, quotes, newlines)
+    const escapeCSV = (value: string): string => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+    
+    const csvRows = [
+      headers.map(escapeCSV).join(','),
+      ...rows.map(row => row.map(cell => escapeCSV(String(cell || ''))).join(','))
+    ];
+    
+    // Add BOM for Excel UTF-8 support
+    return '\uFEFF' + csvRows.join('\n');
+  };
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="card text-center py-12">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Bench Resource Directory</h1>
           <p className="text-gray-600 mt-1">Manage and track all ATP resources</p>
         </div>
-        <button className="btn-primary">
-          Export Report
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Search Bar - Moved to right, larger size */}
+          <div className="relative w-96">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by name, email, skills..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-field pl-12 pr-4 py-3 text-base w-full"
+            />
+          </div>
+          <button onClick={handleExport} className="btn-primary whitespace-nowrap">
+            Export Report
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -137,16 +441,6 @@ export default function BenchDirectory() {
       {/* Filters */}
       <div className="card">
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by name, email, skills..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
-            />
-          </div>
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value as ResourceStatus | 'all')}
@@ -180,7 +474,21 @@ export default function BenchDirectory() {
               <option key={skill} value={skill}>{skill}</option>
             ))}
           </select>
+          {/* <input
+            type="number"
+            placeholder="Min Experience (years)"
+            value={selectedExperience}
+            onChange={(e) => setSelectedExperience(e.target.value ? Number(e.target.value) : '')}
+            min="0"
+            className="input-field"
+          /> */}
         </div>
+        {searching && (
+          <div className="mt-2 text-sm text-gray-600 flex items-center">
+            <LoadingSpinner />
+            <span className="ml-2">Searching resources...</span>
+          </div>
+        )}
       </div>
 
       {/* View Mode Toggle */}
@@ -246,8 +554,10 @@ export default function BenchDirectory() {
 }
 
 function ResourceCard({ resource, isList = false }: { resource: Resource; isList?: boolean }) {
-  const primarySkills = resource.skills.filter(s => s.type === 'primary').slice(0, 3);
-  const hasSoftBlock = resource.softBlocks.length > 0;
+  const primarySkills = Array.isArray(resource.skills) 
+    ? resource.skills.filter(s => s && s.type === 'primary').slice(0, 3)
+    : [];
+  const hasSoftBlock = Array.isArray(resource.softBlocks) && resource.softBlocks.length > 0;
   const { success } = useToastContext();
 
   if (isList) {
@@ -258,7 +568,7 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
             <div className="flex-1">
               <div className="flex items-center space-x-3 mb-2">
                 <Link
-                  to={`/resource/${resource.id}`}
+                  to={`/resource/${resource.employeeId || resource.id}`}
                   className="text-lg font-semibold text-gray-900 hover:text-primary-600"
                 >
                   {resource.name}
@@ -294,7 +604,7 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
           </div>
           <div className="ml-4 flex gap-2">
             <Link
-              to={`/resource/${resource.id}`}
+              to={`/resource/${resource.employeeId || resource.id}`}
               className="btn-primary text-sm py-2 px-4"
             >
               View Details
@@ -334,29 +644,33 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
           </div>
         )}
 
-        {hasSoftBlock && (
+        {hasSoftBlock && Array.isArray(resource.softBlocks) && resource.softBlocks[0] && (
           <div className="flex items-center text-sm text-yellow-600 bg-yellow-50 px-3 py-2 rounded">
             <Calendar className="w-4 h-4 mr-2" />
-            Soft blocked until {new Date(resource.softBlocks[0].endDate).toLocaleDateString()}
+            Soft blocked until {resource.softBlocks[0].endDate ? new Date(resource.softBlocks[0].endDate).toLocaleDateString() : 'N/A'}
           </div>
         )}
 
         <div>
           <p className="text-xs font-medium text-gray-500 mb-2">Primary Skills</p>
-          <div className="flex flex-wrap gap-2">
-            {primarySkills.map((skill, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-primary-50 text-primary-700"
-              >
-                {skill.name}
-                <span className="ml-1 text-primary-500">({skill.level})</span>
-              </span>
-            ))}
-          </div>
+          {primarySkills.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {primarySkills.map((skill, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-primary-50 text-primary-700"
+                >
+                  {skill?.name || 'N/A'}
+                  {skill?.level && <span className="ml-1 text-primary-500">({skill.level})</span>}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">No primary skills listed</p>
+          )}
         </div>
 
-        {resource.certifications.length > 0 && (
+        {Array.isArray(resource.certifications) && resource.certifications.length > 0 && (
           <div>
             <p className="text-xs font-medium text-gray-500 mb-2">Certifications</p>
             <div className="flex flex-wrap gap-2">
@@ -385,7 +699,7 @@ function ResourceCard({ resource, isList = false }: { resource: Resource; isList
 
       <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
         <Link
-          to={`/resource/${resource.id}`}
+          to={`/resource/${resource.employeeId || resource.id}`}
           className="flex-1 btn-primary text-sm py-2 text-center"
         >
           View Details

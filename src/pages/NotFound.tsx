@@ -15,19 +15,19 @@ export default function NotFound() {
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <Link
-            to="/bench"
+            to="/dashboard"
             className="btn-primary flex items-center space-x-2"
           >
             <Home className="w-5 h-5" />
             <span>Go to Dashboard</span>
           </Link>
-          <Link
-            to="/bench"
+          <button
+            onClick={() => window.history.back()}
             className="btn-secondary flex items-center space-x-2"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Go Back</span>
-          </Link>
+          </button>
         </div>
 
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">

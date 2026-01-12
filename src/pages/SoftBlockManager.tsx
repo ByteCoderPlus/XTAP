@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, AlertTriangle, Calendar, User, Plus, X } from 'lucide-react';
 import { SoftBlock } from '../types';
-import { mockResources } from '../data/mockData';
+import { resourceAPI, ApiResource } from '../services/api';
+import { useToastContext } from '../context/ToastContext';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { accountAPI } from '../services/api';
 
 interface SoftBlockWithResource extends SoftBlock {
   resourceName: string;
@@ -10,31 +13,119 @@ interface SoftBlockWithResource extends SoftBlock {
   resourceLocation: string;
 }
 
-const allSoftBlocks: SoftBlockWithResource[] = mockResources
-  .filter(r => r.softBlocks.length > 0)
-  .flatMap(resource =>
-    resource.softBlocks.map(block => ({
-      ...block,
-      resourceName: resource.name,
-      resourceDesignation: resource.designation,
-      resourceLocation: resource.location,
-    }))
-  );
-
 export default function SoftBlockManager() {
-  const [softBlocks] = useState<SoftBlockWithResource[]>(allSoftBlocks);
+  const [softBlocks, setSoftBlocks] = useState<SoftBlockWithResource[]>([]);
+  const [resources, setResources] = useState<ApiResource[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [filterActive, setFilterActive] = useState<boolean | 'all'>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { success, error: showError } = useToastContext();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [resourcesData, accountsData] = await Promise.all([
+          resourceAPI.getAllResources(),
+          accountAPI.getAllAccounts(),
+        ]);
+        
+        // Ensure data is arrays
+        const resourcesArray = Array.isArray(resourcesData) ? resourcesData : [];
+        const accountsArray = Array.isArray(accountsData) ? accountsData : [];
+        
+        setResources(resourcesArray);
+        setAccounts(accountsArray);
+        
+        // Extract soft blocks from resources
+        const allSoftBlocks: SoftBlockWithResource[] = resourcesArray
+          .filter((r: ApiResource | any) => {
+            const softBlocks = r.softBlocks || r.blocks || r.blockedDates || [];
+            return Array.isArray(softBlocks) && softBlocks.length > 0;
+          })
+          .flatMap((resource: ApiResource | any, resourceIndex: number) => {
+            const softBlocks = resource.softBlocks || resource.blocks || resource.blockedDates || [];
+            const resourceId = resource.employeeId || resource.id || `resource-${resourceIndex}`;
+            const resourceName = resource.name || resource.fullName || resource.resourceName || resource.employeeName || '';
+            const resourceDesignation = resource.designation || resource.role || resource.title || resource.position || '';
+            const resourceLocation = resource.location || resource.city || resource.baseLocation || resource.officeLocation || '';
+            
+            return softBlocks.map((block: any, blockIndex: number) => {
+              // Handle API format: blockedUntil is the end date
+              const endDate = block.blockedUntil || block.endDate;
+              // Use resource's createdAt date as start date if not provided, or current date
+              const resourceCreatedDate = resource.createdAt 
+                ? new Date(resource.createdAt).toISOString().split('T')[0] 
+                : new Date().toISOString().split('T')[0];
+              const startDate = block.startDate || resourceCreatedDate;
+              
+              return {
+                ...block,
+                id: block.id || `${resourceId}-${block.accountId || blockIndex}-${endDate || blockIndex}`,
+                resourceId: block.resourceId || resourceId,
+                resourceName: resourceName || '',
+                resourceDesignation: resourceDesignation || '',
+                resourceLocation: resourceLocation || '',
+                // Map API format to expected format
+                startDate: startDate,
+                endDate: endDate,
+                reason: block.accountName || block.reason || 'Soft Block',
+                createdBy: block.createdBy || 'System',
+                createdAt: block.createdAt || resource.createdAt || new Date().toISOString(),
+                // Keep API fields for reference
+                accountId: block.accountId,
+                accountName: block.accountName,
+                blockedUntil: block.blockedUntil,
+              };
+            });
+          });
+        setSoftBlocks(allSoftBlocks);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load soft blocks';
+        setError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [showError]);
 
   const now = new Date();
   const filteredBlocks = softBlocks.filter(block => {
     if (filterActive === 'all') return true;
-    const endDate = new Date(block.endDate);
+    const endDate = parseDate(block.endDate);
+    if (!endDate) return false;
     return filterActive ? endDate > now : endDate <= now;
   });
 
-  const activeBlocks = softBlocks.filter(b => new Date(b.endDate) > now);
-  const expiredBlocks = softBlocks.filter(b => new Date(b.endDate) <= now);
+  const activeBlocks = softBlocks.filter(b => {
+    const endDate = parseDate(b.endDate);
+    return endDate ? endDate > now : false;
+  });
+  const expiredBlocks = softBlocks.filter(b => {
+    const endDate = parseDate(b.endDate);
+    return endDate ? endDate <= now : false;
+  });
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="card text-center py-12">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -109,8 +200,11 @@ export default function SoftBlockManager() {
 
       {/* Soft Blocks List */}
       <div className="space-y-4">
-        {filteredBlocks.map((block) => (
-          <SoftBlockCard key={block.id} block={block} />
+        {filteredBlocks.map((block, index) => (
+          <SoftBlockCard 
+            key={block.id || `${block.resourceId}-${block.startDate}-${block.endDate}-${index}`} 
+            block={block} 
+          />
         ))}
       </div>
 
@@ -122,17 +216,67 @@ export default function SoftBlockManager() {
 
       {/* New Soft Block Form Modal */}
       {showForm && (
-        <SoftBlockFormModal onClose={() => setShowForm(false)} />
+        <SoftBlockFormModal 
+          onClose={() => setShowForm(false)} 
+          resources={resources}
+          accounts={accounts}
+          onSuccess={() => {
+            setShowForm(false);
+            // Refresh data
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );
 }
 
+// Helper function to safely parse dates
+function parseDate(dateValue: any): Date | null {
+  if (!dateValue) return null;
+  
+  // If it's already a Date object
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  
+  // Handle string dates (both "YYYY-MM-DD" and ISO datetime formats)
+  if (typeof dateValue === 'string') {
+    // If it's just a date string (YYYY-MM-DD), ensure it's treated as UTC to avoid timezone issues
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      const parsed = new Date(dateValue + 'T00:00:00Z');
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    // Otherwise try parsing as-is (handles ISO datetime strings)
+    const parsed = new Date(dateValue);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  
+  // If it's a number (timestamp), try to parse it
+  if (typeof dateValue === 'number') {
+    const parsed = new Date(dateValue);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  
+  return null;
+}
+
+// Helper function to format date safely
+function formatDate(dateValue: any): string {
+  const date = parseDate(dateValue);
+  if (!date) return 'N/A';
+  return date.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+}
+
 function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
   const now = new Date();
-  const endDate = new Date(block.endDate);
-  const isActive = endDate > now;
-  const daysRemaining = isActive
+  const endDate = parseDate(block.endDate);
+  const isActive = endDate ? endDate > now : false;
+  const daysRemaining = isActive && endDate
     ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
@@ -158,7 +302,7 @@ function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
             )}
           </div>
           <p className="text-gray-600 mb-1">{block.resourceDesignation} • {block.resourceLocation}</p>
-          <p className="text-sm text-gray-500 mb-3">{block.reason}</p>
+          <p className="text-sm text-gray-500 mb-3">{block.accountName || block.reason || 'Soft Block'}</p>
         </div>
       </div>
 
@@ -168,7 +312,7 @@ function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
           <div>
             <p className="text-xs text-gray-500">Start Date</p>
             <p className="font-medium text-gray-900">
-              {new Date(block.startDate).toLocaleDateString()}
+              {formatDate(block.startDate)}
             </p>
           </div>
         </div>
@@ -177,7 +321,7 @@ function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
           <div>
             <p className="text-xs text-gray-500">End Date</p>
             <p className="font-medium text-gray-900">
-              {new Date(block.endDate).toLocaleDateString()}
+              {formatDate(block.endDate)}
             </p>
           </div>
         </div>
@@ -196,10 +340,10 @@ function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
 
       <div className="flex items-center text-sm text-gray-500 mb-4">
         <User className="w-4 h-4 mr-2" />
-        <span>Created by {block.createdBy} on {new Date(block.createdAt).toLocaleDateString()}</span>
+        <span>Created by {block.createdBy || 'System'} on {formatDate(block.createdAt)}</span>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-gray-200">
+      {/* <div className="flex gap-2 pt-4 border-t border-gray-200">
         {isActive && (
           <>
             <button className="flex-1 btn-secondary text-sm py-2">
@@ -216,12 +360,51 @@ function SoftBlockCard({ block }: { block: SoftBlockWithResource }) {
         >
           View Resource
         </Link>
-      </div>
+      </div> */}
     </div>
   );
 }
 
-function SoftBlockFormModal({ onClose }: { onClose: () => void }) {
+function SoftBlockFormModal({ 
+  onClose, 
+  resources, 
+  accounts,
+  onSuccess 
+}: { 
+  onClose: () => void;
+  resources: ApiResource[];
+  accounts: any[];
+  onSuccess: () => void;
+}) {
+  const [selectedResourceId, setSelectedResourceId] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [blockedUntil, setBlockedUntil] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { success, error: showError } = useToastContext();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedResourceId || !selectedAccountId || !blockedUntil) {
+      showError('Please fill in all fields');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await resourceAPI.softBlockResource(selectedResourceId, selectedAccountId, blockedUntil);
+      success('Soft block created successfully');
+      onSuccess();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create soft block';
+      showError(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-2xl w-full">
@@ -231,39 +414,70 @@ function SoftBlockFormModal({ onClose }: { onClose: () => void }) {
             <X className="w-6 h-6" />
           </button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Resource</label>
-            <select className="input-field">
-              <option value="">Select a resource...</option>
-              {mockResources.map(r => (
-                <option key={r.id} value={r.id}>{r.name} - {r.designation}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
-            <textarea
-              className="input-field"
-              rows={3}
-              placeholder="Reason for soft blocking this resource..."
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <input type="date" className="input-field" />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Resource</label>
+              <select 
+                className="input-field"
+                value={selectedResourceId}
+                onChange={(e) => setSelectedResourceId(e.target.value)}
+                required
+              >
+                <option value="">Select a resource...</option>
+                {resources.map(r => (
+                  <option key={r.id} value={r.employeeId || r.id}>
+                    {r.name} - {r.designation} ({r.employeeId})
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <input type="date" className="input-field" />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Account</label>
+              <select 
+                className="input-field"
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                required
+              >
+                <option value="">Select an account...</option>
+                {accounts.map(account => (
+                  <option key={account.id} value={account.id}>
+                    {account.name || `Account ${account.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Blocked Until</label>
+              <input 
+                type="date" 
+                className="input-field"
+                value={blockedUntil}
+                onChange={(e) => setBlockedUntil(e.target.value)}
+                min={today}
+                required
+              />
             </div>
           </div>
-        </div>
-        <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-          <button onClick={onClose} className="btn-secondary">Cancel</button>
-          <button className="btn-primary">Create Soft Block</button>
-        </div>
+          <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="btn-secondary"
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="btn-primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Creating...' : 'Create Soft Block'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

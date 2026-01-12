@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, User, Briefcase, GitBranch } from 'lucide-react';
-import { mockResources, mockRequirements } from '../data/mockData';
+import { resourceAPI } from '../services/api';
+import { mapApiResourcesToResources } from '../services/resourceMapper';
+import { Resource, Requirement } from '../types';
 
 interface SearchResult {
   type: 'resource' | 'requirement';
@@ -17,19 +19,70 @@ export default function GlobalSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Fetch data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const resourcesData = await resourceAPI.getAllResources();
+        
+        if (Array.isArray(resourcesData)) {
+          const convertedResources = mapApiResourcesToResources(resourcesData);
+          setResources(convertedResources);
+
+          // Derive requirements from considerations
+          const requirementMap = new Map<string, Requirement>();
+          convertedResources.forEach(resource => {
+            if (Array.isArray(resource.considerations)) {
+              resource.considerations.forEach((consideration: any) => {
+                if (consideration.requirementId && !requirementMap.has(consideration.requirementId)) {
+                  requirementMap.set(consideration.requirementId, {
+                    id: consideration.requirementId,
+                    title: consideration.requirementTitle || `Requirement ${consideration.requirementId}`,
+                    description: consideration.requirementDescription || 'Derived from resource considerations',
+                    requiredSkills: consideration.requiredSkills || [],
+                    preferredSkills: consideration.preferredSkills || [],
+                    experienceLevel: consideration.experienceLevel || 'Not specified',
+                    location: consideration.location || resource.location || 'Not specified',
+                    domain: consideration.domain || 'General',
+                    startDate: consideration.startDate || new Date().toISOString().split('T')[0],
+                    status: consideration.status || 'open',
+                    priority: consideration.priority || 'medium',
+                    createdBy: consideration.createdBy || 'System',
+                    createdAt: consideration.createdAt || new Date().toISOString(),
+                    updatedAt: consideration.updatedAt || new Date().toISOString(),
+                  });
+                }
+              });
+            }
+          });
+
+          setRequirements(Array.from(requirementMap.values()));
+        }
+      } catch (err) {
+        console.error('Failed to load search data:', err);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   useEffect(() => {
     if (query.trim().length > 0) {
       const searchResults: SearchResult[] = [];
 
       // Search resources
-      mockResources.forEach(resource => {
-        const matchesName = resource.name.toLowerCase().includes(query.toLowerCase());
-        const matchesEmail = resource.email.toLowerCase().includes(query.toLowerCase());
-        const matchesDesignation = resource.designation.toLowerCase().includes(query.toLowerCase());
-        const matchesSkills = resource.skills.some(s => s.name.toLowerCase().includes(query.toLowerCase()));
+      resources.forEach(resource => {
+        const queryLower = query.toLowerCase();
+        const matchesName = (resource.name || '').toLowerCase().includes(queryLower);
+        const matchesEmail = (resource.email || '').toLowerCase().includes(queryLower);
+        const matchesDesignation = (resource.designation || '').toLowerCase().includes(queryLower);
+        const matchesSkills = Array.isArray(resource.skills) && 
+          resource.skills.some(s => (s?.name || '').toLowerCase().includes(queryLower));
 
         if (matchesName || matchesEmail || matchesDesignation || matchesSkills) {
           searchResults.push({
@@ -38,17 +91,19 @@ export default function GlobalSearch() {
             title: resource.name,
             subtitle: `${resource.designation} • ${resource.location}`,
             icon: User,
-            url: `/resource/${resource.id}`,
+            url: `/resource/${resource.employeeId || resource.id}`,
           });
         }
       });
 
       // Search requirements
-      mockRequirements.forEach(requirement => {
-        const matchesTitle = requirement.title.toLowerCase().includes(query.toLowerCase());
-        const matchesDescription = requirement.description.toLowerCase().includes(query.toLowerCase());
-        const matchesDomain = requirement.domain.toLowerCase().includes(query.toLowerCase());
-        const matchesSkills = requirement.requiredSkills.some(s => s.name.toLowerCase().includes(query.toLowerCase()));
+      requirements.forEach(requirement => {
+        const queryLower = query.toLowerCase();
+        const matchesTitle = requirement.title.toLowerCase().includes(queryLower);
+        const matchesDescription = requirement.description.toLowerCase().includes(queryLower);
+        const matchesDomain = requirement.domain.toLowerCase().includes(queryLower);
+        const matchesSkills = Array.isArray(requirement.requiredSkills) &&
+          requirement.requiredSkills.some(s => (s?.name || '').toLowerCase().includes(queryLower));
 
         if (matchesTitle || matchesDescription || matchesDomain || matchesSkills) {
           searchResults.push({
@@ -68,7 +123,7 @@ export default function GlobalSearch() {
       setResults([]);
       setIsOpen(false);
     }
-  }, [query]);
+  }, [query, resources, requirements]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

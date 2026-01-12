@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, CheckCircle2, XCircle, AlertCircle, User, Briefcase } from 'lucide-react';
-import { InterviewStatus } from '../types';
+import { InterviewStatus, Resource } from '../types';
+import { resourceAPI } from '../services/api';
+import { mapApiResourcesToResources } from '../services/resourceMapper';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useToastContext } from '../context/ToastContext';
 
 interface Interview {
   id: string;
@@ -16,31 +20,6 @@ interface Interview {
   interviewer?: string;
 }
 
-const mockInterviews: Interview[] = [
-  {
-    id: '1',
-    resourceName: 'Rajesh Kumar',
-    resourceId: '1',
-    requirementTitle: 'Senior React Developer - E-commerce Project',
-    requirementId: 'req1',
-    interviewDate: '2024-02-05T10:00:00Z',
-    interviewStatus: 'scheduled',
-    matchScore: 92,
-    interviewer: 'John Doe',
-  },
-  {
-    id: '2',
-    resourceName: 'Priya Sharma',
-    resourceId: '2',
-    requirementTitle: 'Java Backend Developer - Banking System',
-    requirementId: 'req2',
-    interviewDate: '2024-02-03T14:00:00Z',
-    interviewStatus: 'pending-feedback',
-    matchScore: 88,
-    interviewer: 'Jane Smith',
-  },
-];
-
 const statusConfig: Record<InterviewStatus, { color: string; icon: any; label: string }> = {
   pending: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Pending' },
   scheduled: { color: 'bg-blue-100 text-blue-800', icon: Calendar, label: 'Scheduled' },
@@ -50,19 +29,93 @@ const statusConfig: Record<InterviewStatus, { color: string; icon: any; label: s
 };
 
 export default function InterviewTracker() {
-  const [interviews] = useState<Interview[]>(mockInterviews);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<InterviewStatus | 'all'>('all');
+  const { error: showError } = useToastContext();
 
-  const filteredInterviews = filterStatus === 'all'
-    ? interviews
-    : interviews.filter(i => i.interviewStatus === filterStatus);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const resourcesData = await resourceAPI.getAllResources();
+        
+        if (!Array.isArray(resourcesData)) {
+          throw new Error('Invalid response format: resources data is not an array');
+        }
 
-  const stats = {
+        const convertedResources = mapApiResourcesToResources(resourcesData);
+
+        setResources(convertedResources);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load interviews';
+        setError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [showError]);
+
+  // Derive interviews from resource considerations
+  const interviews = useMemo(() => {
+    const interviewList: Interview[] = [];
+    
+    resources.forEach(resource => {
+      if (Array.isArray(resource.considerations)) {
+        resource.considerations.forEach((consideration: any, idx: number) => {
+          if (consideration.interviewStatus) {
+            interviewList.push({
+              id: `${resource.id}-${consideration.id || idx}`,
+              resourceName: resource.name,
+              resourceId: resource.employeeId || resource.id,
+              requirementTitle: consideration.requirementTitle || `Requirement ${consideration.requirementId}`,
+              requirementId: consideration.requirementId || 'unknown',
+              interviewDate: consideration.interviewDate || consideration.createdAt || new Date().toISOString(),
+              interviewStatus: consideration.interviewStatus as InterviewStatus,
+              matchScore: consideration.matchScore || 0,
+              feedback: consideration.feedback,
+              interviewer: consideration.interviewer,
+            });
+          }
+        });
+      }
+    });
+
+    return interviewList;
+  }, [resources]);
+
+  const filteredInterviews = useMemo(() => {
+    return filterStatus === 'all'
+      ? interviews
+      : interviews.filter(i => i.interviewStatus === filterStatus);
+  }, [interviews, filterStatus]);
+
+  const stats = useMemo(() => ({
     total: interviews.length,
     scheduled: interviews.filter(i => i.interviewStatus === 'scheduled').length,
     pendingFeedback: interviews.filter(i => i.interviewStatus === 'pending-feedback').length,
     selected: interviews.filter(i => i.interviewStatus === 'selected').length,
-  };
+  }), [interviews]);
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="card text-center py-12">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

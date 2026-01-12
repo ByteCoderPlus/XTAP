@@ -1,19 +1,133 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, MapPin, Briefcase, Calendar, AlertCircle, Users, CheckCircle2, Clock, DollarSign } from 'lucide-react';
-import { Requirement } from '../types';
-import { mockRequirements, mockMatches } from '../data/mockData';
+import { Requirement, Resource, MatchRecommendation } from '../types';
+import { resourceAPI } from '../services/api';
+import { mapApiResourcesToResources } from '../services/resourceMapper';
+import { findMatches } from '../services/matchingService';
 import Breadcrumbs from '../components/Breadcrumbs';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useToastContext } from '../context/ToastContext';
 
 export default function RequirementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const requirement = mockRequirements.find(r => r.id === id);
-  const matches = mockMatches.filter(m => m.requirement.id === id);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [requirement, setRequirement] = useState<Requirement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { error: showError } = useToastContext();
 
-  if (!requirement) {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const resourcesData = await resourceAPI.getAllResources();
+        
+        if (!Array.isArray(resourcesData)) {
+          throw new Error('Invalid response format: resources data is not an array');
+        }
+
+        const convertedResources = mapApiResourcesToResources(resourcesData);
+
+        setResources(convertedResources);
+
+        // Find requirement from considerations
+        let foundRequirement: Requirement | null = null;
+        const requirementMap = new Map<string, Requirement>();
+
+        convertedResources.forEach(resource => {
+          if (Array.isArray(resource.considerations)) {
+            resource.considerations.forEach((consideration: any) => {
+              if (consideration.requirementId && !requirementMap.has(consideration.requirementId)) {
+                requirementMap.set(consideration.requirementId, {
+                  id: consideration.requirementId,
+                  title: consideration.requirementTitle || `Requirement ${consideration.requirementId}`,
+                  description: consideration.requirementDescription || 'Derived from resource considerations',
+                  requiredSkills: consideration.requiredSkills || [],
+                  preferredSkills: consideration.preferredSkills || [],
+                  experienceLevel: consideration.experienceLevel || 'Not specified',
+                  location: consideration.location || resource.location || 'Not specified',
+                  domain: consideration.domain || 'General',
+                  startDate: consideration.startDate || new Date().toISOString().split('T')[0],
+                  status: consideration.status || 'open',
+                  priority: consideration.priority || 'medium',
+                  createdBy: consideration.createdBy || 'System',
+                  createdAt: consideration.createdAt || new Date().toISOString(),
+                  updatedAt: consideration.updatedAt || new Date().toISOString(),
+                });
+              }
+            });
+          }
+        });
+
+        foundRequirement = requirementMap.get(id || '') || null;
+
+        // If not found, create from common skills
+        if (!foundRequirement) {
+          const skillCounts = new Map<string, number>();
+          convertedResources.forEach(r => {
+            if (Array.isArray(r.skills)) {
+              r.skills.forEach(s => {
+                if (s.type === 'primary') {
+                  skillCounts.set(s.name, (skillCounts.get(s.name) || 0) + 1);
+                }
+              });
+            }
+          });
+
+          const topSkill = Array.from(skillCounts.entries())
+            .sort((a, b) => b[1] - a[1])[0];
+
+          if (topSkill) {
+            foundRequirement = {
+              id: id || 'unknown',
+              title: `Senior ${topSkill[0]} Developer`,
+              description: `Looking for an experienced ${topSkill[0]} developer. ${topSkill[1]} available resources with this skill.`,
+              requiredSkills: [{ name: topSkill[0], level: 'advanced', type: 'primary' }],
+              preferredSkills: [],
+              experienceLevel: '5+ years',
+              location: 'Multiple',
+              domain: 'Technology',
+              startDate: new Date().toISOString().split('T')[0],
+              status: 'open',
+              priority: 'high',
+              createdBy: 'System',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          }
+        }
+
+        setRequirement(foundRequirement);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load requirement';
+        setError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, showError]);
+
+  const matches = useMemo(() => {
+    if (!requirement || resources.length === 0) {
+      return [];
+    }
+    return findMatches(resources, [requirement]);
+  }, [resources, requirement]);
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error || !requirement) {
     return (
       <div className="card text-center py-12">
-        <p className="text-gray-500 mb-4">Requirement not found</p>
+        <p className="text-red-600 mb-4">{error || 'Requirement not found'}</p>
         <button onClick={() => navigate('/requirements')} className="btn-primary">
           Back to Requirements
         </button>
@@ -142,7 +256,7 @@ export default function RequirementDetail() {
                 {matches.slice(0, 3).map((match, idx) => (
                   <Link
                     key={idx}
-                    to={`/resource/${match.resource.id}`}
+                    to={`/resource/${match.resource.employeeId || match.resource.id}`}
                     className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-2">
